@@ -1,0 +1,119 @@
+from flask import Flask, jsonify, request
+import random
+import sys
+import math
+
+app = Flask(__name__);
+
+app.debug = False
+
+SearchList = [0]*21
+whileIt = 0;
+
+while whileIt <= 20:
+	arq = '/home/Vitordmn/' + 'tccVitorNewSimulation_' + str(whileIt) + '.txt';
+	with open(arq) as f:
+		attrb = []
+		attrb = list(map(str,f.read().split()));
+	print("Iniciando ARQUIVO" + str(whileIt));
+
+	attrbIt = 0
+	for item in attrb[:]:
+		attrbEtl = float(attrb[attrbIt].split('e')[0]) * (10 ** float(attrb[attrbIt].split('e')[1]))
+		attrb[attrbIt] = format(attrbEtl, '.10f')
+		attrbIt = attrbIt + 1;
+
+	SearchList[whileIt] = attrb;
+	whileIt = whileIt + 1
+f.close()
+
+@app.route("/value1/<float:value1>/value2/<float:value2>/opc/<int:opc>", methods=["GET"])
+def route_edit_user(value1,value2,opc):
+        if(opc == 1):
+            if( ((value1 > 0) and (value1 < 1024)) and ((value2 > 0) and (value2 <= 200000))):
+                retornoFunc = searchResistance(value1,value2);
+                #retorno = "value1: {} [Sensor Out target 0 - 1024] | value2: {} [ohm target 0 - 200000] | opc: {} | Retorno: {} ohm".format(value1, value2, opc, retornoFunc);
+                retorno = { 'value1': value1 , 'value2':  value2 , 'opc':  opc , 'Retorno': retornoFunc };
+                return jsonify(retorno);
+            else:
+                retorno = { 'value1': value1 , 'value2':  value2 , 'opc':  opc , 'Retorno': 'ERRO' };
+                return jsonify(retorno);
+        if(opc == 2):
+            if( ((value1 > 0) and (value1 < 1024)) and ((value2 > 0) and (value2 <= 5000000))):
+                retornoFunc = ajustPot(value1,value2);
+                #retorno = "value1: {} [Sensor Out target 0 - 1024] | value2: {} [ohm target 0 - ??] | opc: {} | Retorno: {} ohm".format(value1, value2, opc, retornoFunc);
+                retorno = { 'value1': value1, 'value2':  value2 , 'opc': opc , 'Retorno': retornoFunc };
+                return jsonify(retorno);
+            else:
+                retorno = { 'value1': value1 , 'value2':  value2 , 'opc':  opc , 'Retorno': 'ERRO' };
+                return jsonify(retorno);
+        if(opc != 1 and opc !=2):
+            retorno = { 'value1': value1 , 'value2':  value2 , 'opc':  opc , 'Retorno': 'ERRO' };
+            return jsonify(retorno);
+
+def searchResistance(sensorOut, Res_PT_Ajustavel):
+# Buscar a resistencia do dedo com o dado de saida do resistor e com o valor do pot ajustavel
+# http://127.0.0.1:5000/value1/870.00/value2/1000.00/opc/1
+	PT_Ajustavel_Linha = int(Res_PT_Ajustavel/10000.00);
+
+	whileItList = 1;
+	BSLow = 0;
+	BSTop = 20001;
+
+	while whileItList == 1:
+		BSSearch = int(abs( (BSTop + BSLow)/2 ));
+		x = sensorOut/204.6;
+		if (x > float(SearchList[PT_Ajustavel_Linha][BSSearch])):
+			BSLow = BSSearch;
+		else:
+			BSTop = BSSearch;
+		if( (BSTop == BSLow) or (BSTop + 1 == BSLow) or (BSTop - 1 == BSLow) or (BSTop < BSLow)):
+			whileItList = 0;
+			if ( ( BSSearch + 1) <= 20000 and ( BSSearch - 1) >= 0 ):
+				if ( x > float(SearchList[PT_Ajustavel_Linha][BSSearch]) ):
+					x1 = float(SearchList[PT_Ajustavel_Linha][BSSearch]);
+					x2 = float(SearchList[PT_Ajustavel_Linha][BSSearch + 1]);
+					y1 = BSSearch;
+					y2 = BSSearch + 1;
+					BSSearch =  y1 + ( ((x - x1)/(x2 - x1)) * (y2 - y1) )
+
+				else:
+					x1 = float(SearchList[PT_Ajustavel_Linha][BSSearch - 1]);
+					x2 = float(SearchList[PT_Ajustavel_Linha][BSSearch]);
+					y1 = BSSearch - 1;
+					y2 = BSSearch;
+					BSSearch =  y1 + ( ((x - x1)/(x2 - x1)) * (y2 - y1) );
+			return BSSearch * 250
+
+def ajustPot(sensorOut, resDedo):
+# http://127.0.0.1:5000/value1/500.00/value2/400000.00/opc/2
+	resDedo_col = int(resDedo/250.0);
+
+	whileItList = 1;
+	BSLow = 0;
+	BSTop = 21;
+
+	while whileItList == 1:
+		BSSearch = int(abs( (BSTop + BSLow)/2 ));
+		x = sensorOut/204.6;
+		if (sensorOut/204.6 < float(SearchList[BSSearch][resDedo_col])):
+			BSLow = BSSearch;
+		else:
+			BSTop = BSSearch;
+		if( (BSTop == BSLow) or (BSTop + 1 == BSLow) or (BSTop - 1 == BSLow) or (BSTop < BSLow)):
+			whileItList = 0;
+			if ( ( BSSearch + 1) <= 20 and ( BSSearch - 1) >= 0 ):
+				if ( x > float(SearchList[BSSearch][resDedo_col]) ):
+					x1 = float(SearchList[BSSearch][resDedo_col]);
+					x2 = float(SearchList[BSSearch + 1][resDedo_col]);
+					y1 = BSSearch;
+					y2 = BSSearch + 1;
+					BSSearch =  y1 + ( ((x - x1)/(x2 - x1)) * (y2 - y1) )
+
+				else:
+					x1 = float(SearchList[BSSearch - 1][resDedo_col]);
+					x2 = float(SearchList[BSSearch][resDedo_col]);
+					y1 = BSSearch - 1;
+					y2 = BSSearch;
+					BSSearch =  y1 + ( ((x - x1)/(x2 - x1)) * (y2 - y1) );
+			return BSSearch * 10000
